@@ -52,32 +52,28 @@ async function cargarProveedoresXML() {
 /**
  * Llena el dropdown con los proveedores del XML
  */
-function llenarDropdownProveedores() {
+function llenarDropdownProveedores(lista = listaProveedores) {
     const select = document.getElementById('cve-prov-select');
-    
-    // Limpiar opciones existentes (excepto la primera)
     select.innerHTML = '<option value="">-- Seleccione un proveedor --</option>';
-    
-    // Ordenar alfabéticamente por código
-    const proveedoresOrdenados = listaProveedores.sort((a, b) => 
-        a.cve_prov.localeCompare(b.cve_prov)
+
+    const proveedoresOrdenados = [...lista].sort((a, b) =>
+        a.nombre.localeCompare(b.nombre)
     );
-    
-    // Agregar opciones
+
     proveedoresOrdenados.forEach(prov => {
         const option = document.createElement('option');
-        option.value = prov.cve_prov;
-        option.textContent = `${prov.cve_prov} - ${prov.nombre}`;
-        
-        // Deshabilitar si está inactivo
+        option.value = prov.cve_prov;          // 🔑 sigue siendo la clave
+        option.textContent = prov.nombre;      // 👁️ solo nombre visible
+
         if (!prov.activo) {
             option.disabled = true;
             option.textContent += ' (Desactivado)';
         }
-        
+
         select.appendChild(option);
     });
 }
+
 
 /**
  * Busca un proveedor por su código
@@ -85,3 +81,21 @@ function llenarDropdownProveedores() {
 function buscarProveedorPorCodigo(cveProv) {
     return listaProveedores.find(p => p.cve_prov === cveProv);
 }
+function filtrarProveedoresPorNombre(texto) {
+    const filtro = texto.toLowerCase();
+
+    const filtrados = listaProveedores.filter(p =>
+        p.nombre && p.nombre.toLowerCase().includes(filtro)
+    );
+
+    llenarDropdownProveedores(filtrados);
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const inputBuscar = document.getElementById('buscar-proveedor');
+
+    if (inputBuscar) {
+        inputBuscar.addEventListener('input', (e) => {
+            filtrarProveedoresPorNombre(e.target.value);
+        });
+    }
+});
