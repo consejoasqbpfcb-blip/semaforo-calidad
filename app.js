@@ -63,13 +63,25 @@ function calcularSemaforoMicro(data) {
  * Calcula el semáforo de pesticidas
  * @param {string} resultado - "CUMPLE", "NO CUMPLE", o "N/A"
  * @returns {string} - "VERDE", "ROJO", o "N/A"
+/**
+ * Calcula el semáforo de pesticidas
+ * @param {string} valor - "CUMPLE", "BAJO_RANGO", "NO CUMPLE", "N/A"
+ * @returns {string} - "VERDE", "AMARILLO", "ROJO", "GRIS"
  */
-function calcularSemaforoPesticidas(resultado) {
-    if (resultado === "N/A") {
-        return "N/A";
+function calcularSemaforoPesticidas(valor) {
+    switch (valor) {
+        case 'CUMPLE':
+            return 'VERDE';
+        case 'BAJO_RANGO':
+            return 'AMARILLO';
+        case 'NO CUMPLE':
+            return 'ROJO';
+        case 'N/A':
+        default:
+            return 'GRIS';
     }
-    return resultado === "CUMPLE" ? "VERDE" : "ROJO";
 }
+
 
 // ============================================
 // FUNCIONES DE FIRESTORE
