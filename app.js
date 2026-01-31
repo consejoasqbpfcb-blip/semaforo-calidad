@@ -2,13 +2,76 @@
 // CONFIGURACIÓN Y CONSTANTES
 // ============================================
 
-// Límites para cálculo de semáforos (ajustar según normativa)
-const LIMITES = {
-    ecoli_max: 10,             // UFC/g (ROJO si > 10)
-    fecales_max: 10,           // UFC/g (ROJO si > 10)
-    totales_advertencia: 100,  // UFC/g (AMARILLO si > 100)
-    totales_max: 1000          // UFC/g (ROJO si > 1000)
-};
+/**
+ * Calcula el semáforo de microbiología
+ * Permite que algunos parámetros estén en N/A
+ * NO invalida el análisis si otros sí fueron medidos
+ */
+function calcularSemaforoMicro(data) {
+    const { salmonella, ecoli, fecales, totales } = data;
+
+    let hayDato = false;        // Se activa si AL MENOS un análisis existe
+    let hayAdvertencia = false; // Para amarillos
+
+    // ----------------------------
+    // SALMONELLA
+    // ----------------------------
+    if (salmonella && salmonella !== "N/A") {
+        hayDato = true;
+        if (salmonella === "POSITIVO") {
+            return "ROJO"; // Salmonella positiva siempre es crítica
+        }
+    }
+
+    // ----------------------------
+    // E. COLI
+    // ----------------------------
+    if (ecoli !== null && ecoli !== undefined && ecoli !== "") {
+        hayDato = true;
+        if (ecoli > LIMITES.ecoli_max) {
+            return "ROJO"; // E. coli alto manda aunque Salmonella sea N/A
+        }
+    }
+
+    // ----------------------------
+    // COLIFORMES FECALES
+    // ----------------------------
+    if (fecales !== null && fecales !== undefined && fecales !== "") {
+        hayDato = true;
+        if (fecales > LIMITES.fecales_max) {
+            return "ROJO";
+        }
+    }
+
+    // ----------------------------
+    // COLIFORMES TOTALES
+    // ----------------------------
+    if (totales !== null && totales !== undefined && totales !== "") {
+        hayDato = true;
+
+        if (totales > LIMITES.totales_max) {
+            return "ROJO";
+        }
+
+        if (totales > LIMITES.totales_advertencia) {
+            hayAdvertencia = true;
+        }
+    }
+
+    // ----------------------------
+    // RESULTADO FINAL
+    // ----------------------------
+    if (!hayDato) {
+        return "N/A"; // Nada fue medido
+    }
+
+    if (hayAdvertencia) {
+        return "AMARILLO";
+    }
+
+    return "VERDE";
+}
+
 
 // Estado global de la aplicación
 let proveedorActual = null;
