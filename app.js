@@ -1,401 +1,449 @@
-// app.js - Reemplaza tu JS actual por esto (mantiene IDs que tienes en index.html)
-
 // ============================================
 // CONFIGURACIÓN Y CONSTANTES
 // ============================================
+
+// Límites para cálculo de semáforos (ajustar según normativa)
 const LIMITES = {
-    ecoli_max: 10,
-    fecales_max: 10,
-    totales_advertencia: 100,
-    totales_max: 1000
+    ecoli_max: 10,             // UFC/g (ROJO si > 10)
+    fecales_max: 10,           // UFC/g (ROJO si > 10)
+    totales_advertencia: 100,  // UFC/g (AMARILLO si > 100)
+    totales_max: 1000          // UFC/g (ROJO si > 1000)
 };
 
+// Estado global de la aplicación
 let proveedorActual = null;
-let listaProveedores = [];
 
 // ============================================
-// UTIL: mapear nombres de semáforo a clases CSS
+// FUNCIONES DE CÁLCULO DE SEMÁFOROS
 // ============================================
-function semClass(semaforo) {
-    if (!semaforo) return 'gris';
-    const s = String(semaforo).toLowerCase();
-    if (s === 'n/a' || s === 'na') return 'gris';
-    if (s === 'gris') return 'gris';
-    return s.replace(/\s+/g, '-'); // ejemplo "NO CUMPLE" -> "no-cumple"
-}
 
-// ============================================
-// CARGA PROVEEDORES DESDE XML
-// ============================================
-async function cargarProveedoresXML() {
-    try {
-        const resp = await fetch('PROVEEDORES.xml');
-        const xmlText = await resp.text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-        const detalles = xmlDoc.getElementsByTagName('Details');
+/**
+ * Calcula el semáforo de microbiología
+ * @param {Object} data - Datos de microbiología {salmonella, ecoli, fecales, totales}
+ * @returns {string} - "VERDE", "AMARILLO", "ROJO", o "N/A"
+ */
+function calcularSemaforoMicro(data) {
+    const { salmonella, ecoli, fecales, totales } = data;
 
-        listaProveedores = [];
-
-        for (let i = 0; i < detalles.length; i++) {
-            const d = detalles[i];
-            const cveProv = d.getAttribute('Cve_Prov') || d.getAttribute('Cve_Prov'.toLowerCase());
-            const nomProv = d.getAttribute('Nom_Prov') || d.getAttribute('Nom_Prov'.toLowerCase());
-            const edoOrigen = d.getAttribute('Edo_Origen') || d.getAttribute('Edo_Origen'.toLowerCase());
-            const estatus = d.getAttribute('Estatus') || d.getAttribute('Estatus'.toLowerCase());
-
-            if (cveProv && cveProv !== '.' && cveProv.trim() !== '') {
-                listaProveedores.push({
-                    cve_prov: cveProv.trim(),
-                    nombre: (nomProv || 'N/A').trim(),
-                    edo_origen: (edoOrigen || '--').trim(),
-                    activo: String(estatus || '').toLowerCase() === 'activo'
-                });
-            }
-        }
-
-        // render inicial
-        llenarDropdownProveedores(listaProveedores);
-    } catch (err) {
-        console.error('Error cargando PROVEEDORES.xml:', err);
-        alert('Error al cargar PROVEEDORES.xml. Verifica que exista en la carpeta y esté accesible.');
-    }
-}
-
-// ============================================
-// RENDERS Y BÚSQUEDA PROVEEDORES
-// ============================================
-function llenarDropdownProveedores(lista = listaProveedores) {
-    const select = document.getElementById('cve-prov-select');
-    if (!select) return;
-    select.innerHTML = '<option value="">-- Seleccione un proveedor --</option>';
-
-    // ordenar por nombre para que buscar por nombre tenga sentido
-    const ordenados = [...lista].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-
-    ordenados.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.cve_prov;
-        opt.textContent = `${p.cve_prov} - ${p.nombre}`;
-        if (!p.activo) {
-            opt.disabled = true;
-            opt.textContent += ' (Desactivado)';
-        }
-        select.appendChild(opt);
-    });
-}
-
-function filtrarProveedoresPorNombre(texto) {
-    const q = (texto || '').toLowerCase();
-    const filtrados = listaProveedores.filter(p =>
-        (p.nombre || '').toLowerCase().includes(q) ||
-        (p.cve_prov || '').toLowerCase().includes(q)
-    );
-    llenarDropdownProveedores(filtrados);
-}
-
-function buscarProveedorPorCodigo(cve) {
-    return listaProveedores.find(p => p.cve_prov === cve);
-}
-
-// ============================================
-// CÁLCULO DE SEMÁFOROS
-// ============================================
-function calcularSemaforoMicro({ salmonella, ecoli, fecales, totales }) {
     let hayDato = false;
     let hayAdvertencia = false;
 
-    // Salmonella: valores esperados según tu HTML: "NEGATIVO", "POSITIVO", "N/A"
-    if (salmonella && salmonella !== 'N/A') {
+    // ----------------------------
+    // SALMONELLA
+    // ----------------------------
+    if (salmonella && salmonella !== "N/A") {
         hayDato = true;
-        if (String(salmonella).toUpperCase() === 'POSITIVO') return 'ROJO';
+        if (salmonella === "POSITIVO") {
+            return "ROJO";
+        }
     }
 
-    // E. coli
-    if (Number.isFinite(ecoli)) {
+    // ----------------------------
+    // E. COLI
+    // ----------------------------
+    if (ecoli !== null && ecoli !== undefined && ecoli !== "") {
         hayDato = true;
-        if (ecoli > LIMITES.ecoli_max) return 'ROJO';
+        if (ecoli > LIMITES.ecoli_max) {
+            return "ROJO";
+        }
     }
 
-    // Fecales
-    if (Number.isFinite(fecales)) {
+    // ----------------------------
+    // COLIFORMES FECALES
+    // ----------------------------
+    if (fecales !== null && fecales !== undefined && fecales !== "") {
         hayDato = true;
-        if (fecales > LIMITES.fecales_max) return 'ROJO';
+        if (fecales > LIMITES.fecales_max) {
+            return "ROJO";
+        }
     }
 
-    // Totales
-    if (Number.isFinite(totales)) {
+    // ----------------------------
+    // COLIFORMES TOTALES
+    // ----------------------------
+    if (totales !== null && totales !== undefined && totales !== "") {
         hayDato = true;
-        if (totales > LIMITES.totales_max) return 'ROJO';
-        if (totales > LIMITES.totales_advertencia) hayAdvertencia = true;
+
+        if (totales > LIMITES.totales_max) {
+            return "ROJO";
+        }
+
+        if (totales > LIMITES.totales_advertencia) {
+            hayAdvertencia = true;
+        }
     }
 
-    if (!hayDato) return 'N/A';
-    if (hayAdvertencia) return 'AMARILLO';
-    return 'VERDE';
+    // ----------------------------
+    // RESULTADO FINAL
+    // ----------------------------
+    if (!hayDato) {
+        return "N/A"; // nada se midió
+    }
+
+    if (hayAdvertencia) {
+        return "AMARILLO";
+    }
+
+    return "VERDE";
 }
 
+
+/**
+ * Calcula el semáforo de pesticidas
+ * @param {string} resultado - "CUMPLE", "NO CUMPLE", o "N/A"
+ * @returns {string} - "VERDE", "ROJO", o "N/A"
+/**
+ * Calcula el semáforo de pesticidas
+ * @param {string} valor - "CUMPLE", "BAJO_RANGO", "NO CUMPLE", "N/A"
+ * @returns {string} - "VERDE", "AMARILLO", "ROJO", "GRIS"
+ */
 function calcularSemaforoPesticidas(valor) {
-    // valores en tu HTML: "CUMPLE", "BAJO_RANGO", "NO CUMPLE", "N/A"
-    if (!valor || valor === '') return 'GRIS';
     switch (valor) {
-        case 'CUMPLE': return 'VERDE';
-        case 'BAJO_RANGO': return 'AMARILLO';
-        case 'NO CUMPLE': return 'ROJO';
-        case 'N/A': return 'GRIS';
-        default: return 'GRIS';
+        case 'CUMPLE':
+            return 'VERDE';
+
+        case 'BAJO_RANGO':
+            return 'AMARILLO';
+
+        case 'NO CUMPLE':
+            return 'ROJO';
+
+        case 'N/A':
+        default:
+            return 'GRIS';
     }
 }
 
+
 // ============================================
-// FIRESTORE: obtener historial y guardar
-// (asume que config.js ya dejó global `db` y `firebase`)
+// FUNCIONES DE FIRESTORE
 // ============================================
+
+/**
+ * Obtiene el historial de registros de un proveedor
+ * @param {string} cveProv - Código del proveedor
+ * @returns {Promise<Array>} - Array de registros ordenados por fecha
+ */
 async function obtenerHistorial(cveProv) {
     try {
         const snapshot = await db.collection('registros')
             .where('cve_prov', '==', cveProv)
             .orderBy('timestamp', 'desc')
             .get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (err) {
-        console.error('Error obtenerHistorial:', err);
-        return [];
+        
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    } catch (error) {
+        console.error("Error al obtener historial:", error);
+        throw error;
     }
 }
 
+/**
+ * Registra un nuevo análisis en Firestore
+ * @param {Object} datos - Datos del análisis
+ * @returns {Promise<string>} - ID del documento creado
+ */
 async function registrarAnalisis(datos) {
     try {
-        const ref = await db.collection('registros').add({
+        const docRef = await db.collection('registros').add({
             ...datos,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-        return ref.id;
-    } catch (err) {
-        console.error('Error registrarAnalisis:', err);
-        throw err;
+        
+        return docRef.id;
+    } catch (error) {
+        console.error("Error al registrar análisis:", error);
+        throw error;
     }
 }
 
 // ============================================
-// UI: mostrar info, historial, preview, modal
+// FUNCIONES DE UI
 // ============================================
+
+/**
+ * Muestra información del proveedor en la UI
+ * @param {Object} proveedor - Datos del proveedor
+ */
 function mostrarInfoProveedor(proveedor) {
     document.getElementById('prov-codigo').textContent = proveedor.cve_prov || 'N/A';
     document.getElementById('prov-nombre').textContent = proveedor.nombre || 'N/A';
     document.getElementById('prov-estado-origen').textContent = proveedor.edo_origen || '--';
     document.getElementById('prov-estatus').textContent = proveedor.activo ? '✅ Activo' : '❌ Inactivo';
     document.getElementById('proveedor-info').classList.remove('hidden');
+    
+    // Habilitar secciones
     document.getElementById('section-historial').style.opacity = '1';
     document.getElementById('section-registro').style.opacity = '1';
 }
 
+/**
+ * Muestra el historial en una tabla
+ * @param {Array} registros - Array de registros
+ */
 function mostrarHistorial(registros) {
     const container = document.getElementById('historial-container');
-    if (!container) return;
-
-    if (!registros || registros.length === 0) {
+    
+    if (registros.length === 0) {
         container.innerHTML = '<p class="text-muted">No hay registros previos para este proveedor</p>';
         return;
     }
-
+    
     let html = `
-    <table class="tabla-historial">
-      <thead>
-        <tr>
-          <th>Fecha</th><th>Salmonella</th><th>E. coli</th><th>Fecales</th><th>Totales</th><th>Pesticidas</th><th>🚦 Micro</th><th>🚦 Pest</th>
-        </tr>
-      </thead>
-      <tbody>
+        <table class="tabla-historial">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Salmonella</th>
+                    <th>E. coli</th>
+                    <th>Fecales</th>
+                    <th>Totales</th>
+                    <th>Pesticidas</th>
+                    <th>🚦 Micro</th>
+                    <th>🚦 Pest</th>
+                </tr>
+            </thead>
+            <tbody>
     `;
-
+    
     registros.forEach(reg => {
         const micro = reg.microbiologia || {};
         const pest = reg.pesticidas || {};
         const sem = reg.semaforos || {};
-        const mostrarValor = (v) => (v !== undefined && v !== null && v !== '') ? v : 'N/A';
-
-        const claseMicro = semClass(sem.micro || 'N/A');
-        const clasePest = semClass(sem.pesticidas || 'GRIS');
-
+        
+        // Función para mostrar valores o N/A
+        const mostrarValor = (val) => (val !== undefined && val !== null && val !== '') ? val : 'N/A';
+        
         html += `
-          <tr>
-            <td>${reg.fecha || 'N/A'}</td>
-            <td>${mostrarValor(micro.salmonella)}</td>
-            <td>${mostrarValor(micro.ecoli)}</td>
-            <td>${mostrarValor(micro.fecales)}</td>
-            <td>${mostrarValor(micro.totales)}</td>
-            <td>${mostrarValor(pest.resultado)}</td>
-            <td><span class="semaforo ${claseMicro}"></span></td>
-            <td><span class="semaforo ${clasePest}"></span></td>
-          </tr>
+            <tr>
+                <td>${reg.fecha || 'N/A'}</td>
+                <td>${mostrarValor(micro.salmonella)}</td>
+                <td>${mostrarValor(micro.ecoli)}</td>
+                <td>${mostrarValor(micro.fecales)}</td>
+                <td>${mostrarValor(micro.totales)}</td>
+                <td>${mostrarValor(pest.resultado)}</td>
+                <td><span class="semaforo ${(sem.micro || 'n/a').toLowerCase().replace('/', '-')}"></span></td>
+                <td><span class="semaforo ${(sem.pesticidas || 'n/a').toLowerCase().replace('/', '-')}"></span></td>
+            </tr>
         `;
     });
-
-    html += `</tbody></table>`;
+    
+    html += `
+            </tbody>
+        </table>
+    `;
+    
     container.innerHTML = html;
 }
 
+/**
+ * Actualiza la vista previa de semáforos
+ */
 function actualizarPreviewSemaforos() {
-    const salmonella = document.getElementById('salmonella').value || 'N/A';
-
-    const ecoliRaw = document.getElementById('ecoli').value;
-    const fecalesRaw = document.getElementById('fecales').value;
-    const totalesRaw = document.getElementById('totales').value;
-
-    const pesticidas = document.getElementById('pesticidas').value || '';
-
-    const ecoli = ecoliRaw === '' ? null : parseFloat(ecoliRaw);
-    const fecales = fecalesRaw === '' ? null : parseFloat(fecalesRaw);
-    const totales = totalesRaw === '' ? null : parseFloat(totalesRaw);
-
-    // si no hay NADA, ocultar preview
-    const hayAlgo = (salmonella && salmonella !== 'N/A') || ecoli !== null || fecales !== null || totales !== null || pesticidas !== '';
-    if (!hayAlgo) {
+    const salmonella = document.getElementById('salmonella').value;
+    const ecoli = parseFloat(document.getElementById('ecoli').value) || 0;
+    const fecales = parseFloat(document.getElementById('fecales').value) || 0;
+    const totales = parseFloat(document.getElementById('totales').value) || 0;
+    const pesticidas = document.getElementById('pesticidas').value;
+    
+    // Solo mostrar si hay datos suficientes
+    if (!salmonella || !pesticidas) {
         document.getElementById('preview-semaforos').classList.add('hidden');
         return;
     }
-
-    const semMicro = calcularSemaforoMicro({ salmonella, ecoli, fecales, totales });
-    const semPest = calcularSemaforoPesticidas(pesticidas);
-
+    
+    // Calcular semáforos
+    const semaforoMicro = calcularSemaforoMicro({ salmonella, ecoli, fecales, totales });
+    const semaforoPest = calcularSemaforoPesticidas(pesticidas);
+    
+    // Actualizar UI
     const previewMicro = document.getElementById('preview-micro');
     const previewPest = document.getElementById('preview-pesticidas');
-
-    previewMicro.className = `semaforo ${semClass(semMicro)}`;
-    previewPest.className = `semaforo ${semClass(semPest)}`;
-
+    
+    previewMicro.className = `semaforo ${semaforoMicro.toLowerCase().replace('/', '-')}`;
+    previewPest.className = `semaforo ${semaforoPest.toLowerCase().replace('/', '-')}`;
+    
     document.getElementById('preview-semaforos').classList.remove('hidden');
 }
 
+/**
+ * Muestra el modal de confirmación
+ */
 function mostrarModal() {
     document.getElementById('modal-confirmacion').classList.remove('hidden');
 }
+
+/**
+ * Cierra el modal de confirmación
+ */
 function cerrarModal() {
     document.getElementById('modal-confirmacion').classList.add('hidden');
 }
+
+/**
+ * Limpia el formulario de análisis
+ */
 function limpiarFormulario() {
     document.getElementById('form-analisis').reset();
     document.getElementById('preview-semaforos').classList.add('hidden');
+    
+    // Establecer fecha actual por defecto
     const hoy = new Date().toISOString().split('T')[0];
     document.getElementById('fecha').value = hoy;
 }
 
 // ============================================
-// EVENTOS Y ARRANQUE
+// EVENT LISTENERS
 // ============================================
-document.addEventListener('DOMContentLoaded', async () => {
-    // cargar proveedores y render
-    await cargarProveedoresXML();
 
-    // fecha por defecto
+document.addEventListener('DOMContentLoaded', async () => {
+    
+    // ========================================
+    // CARGAR PROVEEDORES DESDE XML
+    // ========================================
+    await cargarProveedoresXML();
+    llenarDropdownProveedores();
+    
+    // Establecer fecha actual por defecto
     const hoy = new Date().toISOString().split('T')[0];
     document.getElementById('fecha').value = hoy;
-
-    // listeners de búsqueda y dropdown
-    const inputBuscar = document.getElementById('buscar-proveedor');
-    if (inputBuscar) {
-        inputBuscar.addEventListener('input', (e) => filtrarProveedoresPorNombre(e.target.value));
-    }
-
-    const selectProv = document.getElementById('cve-prov-select');
-    if (selectProv) {
-        selectProv.addEventListener('change', async (e) => {
-            const cve = e.target.value;
-            if (!cve) {
-                document.getElementById('proveedor-info').classList.add('hidden');
-                document.getElementById('historial-container').innerHTML = '<p class="text-muted">Seleccione un proveedor para ver su historial</p>';
-                document.getElementById('section-historial').style.opacity = '0.5';
-                document.getElementById('section-registro').style.opacity = '0.5';
-                proveedorActual = null;
-                return;
-            }
-
-            const prov = buscarProveedorPorCodigo(cve);
-            if (!prov) {
-                alert('Error al cargar proveedor');
-                return;
-            }
-
-            proveedorActual = prov;
-            mostrarInfoProveedor(prov);
-
-            try {
-                const hist = await obtenerHistorial(cve);
-                mostrarHistorial(hist);
-            } catch (err) {
-                console.error(err);
-                document.getElementById('historial-container').innerHTML = '<p class="text-muted">⚠️ Error al cargar historial</p>';
-            }
-        });
-    }
-
-    // listeners para preview
-    ['salmonella', 'ecoli', 'fecales', 'totales', 'pesticidas'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('change', actualizarPreviewSemaforos);
-        el.addEventListener('input', actualizarPreviewSemaforos);
+    
+    // Deshabilitar secciones hasta seleccionar proveedor
+    document.getElementById('section-historial').style.opacity = '0.5';
+    document.getElementById('section-registro').style.opacity = '0.5';
+    
+    // ========================================
+    // SELECCIONAR PROVEEDOR DEL DROPDOWN
+    // ========================================
+    document.getElementById('cve-prov-select').addEventListener('change', async (e) => {
+        const cveProv = e.target.value;
+        
+        if (!cveProv) {
+            // Si no hay selección, ocultar todo
+            document.getElementById('proveedor-info').classList.add('hidden');
+            document.getElementById('historial-container').innerHTML = '<p class="text-muted">Seleccione un proveedor para ver su historial</p>';
+            document.getElementById('section-historial').style.opacity = '0.5';
+            document.getElementById('section-registro').style.opacity = '0.5';
+            proveedorActual = null;
+            return;
+        }
+        
+        // Buscar proveedor en el XML
+        const proveedor = buscarProveedorPorCodigo(cveProv);
+        
+        if (!proveedor) {
+            alert('❌ Error al cargar información del proveedor');
+            return;
+        }
+        
+        // Guardar proveedor actual
+        proveedorActual = proveedor;
+        
+        // Mostrar información
+        mostrarInfoProveedor(proveedor);
+        
+        // Cargar historial desde Firebase
+        try {
+            const historial = await obtenerHistorial(cveProv);
+            mostrarHistorial(historial);
+        } catch (error) {
+            console.error('Error al cargar historial:', error);
+            document.getElementById('historial-container').innerHTML = '<p class="text-muted">⚠️ Error al cargar historial</p>';
+        }
     });
-
-    // submit del formulario
-    const form = document.getElementById('form-analisis');
-    if (form) {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!proveedorActual) {
-                alert('⚠️ Primero debe seleccionar un proveedor');
-                return;
+    
+    // ========================================
+    // ACTUALIZAR PREVIEW DE SEMÁFOROS
+    // ========================================
+    const camposAnalisis = ['salmonella', 'ecoli', 'fecales', 'totales', 'pesticidas'];
+    camposAnalisis.forEach(campo => {
+        const elemento = document.getElementById(campo);
+        if (elemento) {
+            elemento.addEventListener('change', actualizarPreviewSemaforos);
+            elemento.addEventListener('input', actualizarPreviewSemaforos);
+        }
+    });
+    
+    // ========================================
+    // SUBMIT DEL FORMULARIO
+    // ========================================
+    document.getElementById('form-analisis').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if (!proveedorActual) {
+            alert('⚠️ Primero debe seleccionar un proveedor');
+            return;
+        }
+        
+        // Recopilar datos del formulario
+        const salmonella = document.getElementById('salmonella').value;
+        const ecoli = parseFloat(document.getElementById('ecoli').value);
+        const fecales = parseFloat(document.getElementById('fecales').value);
+        const totales = parseFloat(document.getElementById('totales').value);
+        const pesticidas = document.getElementById('pesticidas').value;
+        const fecha = document.getElementById('fecha').value;
+        
+        // Calcular semáforos
+        const semaforoMicro = calcularSemaforoMicro({ salmonella, ecoli, fecales, totales });
+        const semaforoPest = calcularSemaforoPesticidas(pesticidas);
+        
+        // Construir objeto de datos
+        const datos = {
+            cve_prov: proveedorActual.cve_prov,
+            fecha: fecha,
+            microbiologia: {
+                salmonella: salmonella,
+                ecoli: ecoli,
+                fecales: fecales,
+                totales: totales
+            },
+            pesticidas: {
+                resultado: pesticidas
+            },
+            semaforos: {
+                micro: semaforoMicro,
+                pesticidas: semaforoPest
             }
-
-            const salmonella = document.getElementById('salmonella').value || 'N/A';
-            const ecoliRaw = document.getElementById('ecoli').value;
-            const fecalesRaw = document.getElementById('fecales').value;
-            const totalesRaw = document.getElementById('totales').value;
-            const pesticidas = document.getElementById('pesticidas').value || '';
-
-            const ecoli = ecoliRaw === '' ? null : parseFloat(ecoliRaw);
-            const fecales = fecalesRaw === '' ? null : parseFloat(fecalesRaw);
-            const totales = totalesRaw === '' ? null : parseFloat(totalesRaw);
-
-            const semMicro = calcularSemaforoMicro({ salmonella, ecoli, fecales, totales });
-            const semPest = calcularSemaforoPesticidas(pesticidas);
-
-            const datos = {
-                cve_prov: proveedorActual.cve_prov,
-                fecha: document.getElementById('fecha').value,
-                microbiologia: { salmonella, ecoli, fecales, totales },
-                pesticidas: { resultado: pesticidas },
-                semaforos: { micro: semMicro, pesticidas: semPest }
-            };
-
-            const btn = e.target.querySelector('button[type="submit"]');
-            btn.disabled = true;
-            btn.textContent = 'Guardando...';
-
-            try {
-                await registrarAnalisis(datos);
-                mostrarModal();
-                limpiarFormulario();
-                const hist = await obtenerHistorial(proveedorActual.cve_prov);
-                mostrarHistorial(hist);
-            } catch (err) {
-                console.error(err);
-                alert('❌ Error al guardar. Revisa la conexión a Firebase.');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '✅ Guardar Análisis';
-            }
-        });
-    }
-
-    // modal
-    const btnCerrar = document.getElementById('btn-cerrar-modal');
-    if (btnCerrar) btnCerrar.addEventListener('click', cerrarModal);
-    const modal = document.getElementById('modal-confirmacion');
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target.id === 'modal-confirmacion') cerrarModal();
-        });
-    }
+        };
+        
+        const btnSubmit = e.target.querySelector('button[type="submit"]');
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = 'Guardando...';
+        
+        try {
+            await registrarAnalisis(datos);
+            
+            // Mostrar confirmación
+            mostrarModal();
+            
+            // Limpiar formulario
+            limpiarFormulario();
+            
+            // Recargar historial
+            const historial = await obtenerHistorial(proveedorActual.cve_prov);
+            mostrarHistorial(historial);
+            
+        } catch (error) {
+            alert('❌ Error al guardar el análisis. Revise la conexión a Firebase.');
+            console.error(error);
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = '✅ Guardar Análisis';
+        }
+    });
+    
+    // ========================================
+    // CERRAR MODAL
+    // ========================================
+    document.getElementById('btn-cerrar-modal').addEventListener('click', cerrarModal);
+    
+    // Cerrar modal al hacer click fuera
+    document.getElementById('modal-confirmacion').addEventListener('click', (e) => {
+        if (e.target.id === 'modal-confirmacion') {
+            cerrarModal();
+        }
+    });
 });
