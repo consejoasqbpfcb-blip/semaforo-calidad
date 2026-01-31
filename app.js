@@ -24,69 +24,40 @@ let proveedorActual = null;
  */
 function calcularSemaforoMicro(data) {
     const { salmonella, ecoli, fecales, totales } = data;
-
-    let hayDato = false;
-    let hayAdvertencia = false;
-
-    // ----------------------------
-    // SALMONELLA
-    // ----------------------------
-    if (salmonella && salmonella !== "N/A") {
-        hayDato = true;
-        if (salmonella === "POSITIVO") {
-            return "ROJO";
-        }
+    
+    // Si Salmonella es N/A, no se hizo análisis microbiológico
+    if (salmonella === "N/A") {
+        return "N/A";
     }
-
-    // ----------------------------
-    // E. COLI
-    // ----------------------------
-    if (ecoli !== null && ecoli !== undefined && ecoli !== "") {
-        hayDato = true;
-        if (ecoli > LIMITES.ecoli_max) {
-            return "ROJO";
-        }
+    
+    // Regla 1: Salmonella POSITIVO → ROJO
+    if (salmonella === "POSITIVO") {
+        return "ROJO";
     }
-
-    // ----------------------------
-    // COLIFORMES FECALES
-    // ----------------------------
-    if (fecales !== null && fecales !== undefined && fecales !== "") {
-        hayDato = true;
-        if (fecales > LIMITES.fecales_max) {
-            return "ROJO";
-        }
+    
+    // Regla 2: E. coli arriba del límite → ROJO
+    if (ecoli > LIMITES.ecoli_max) {
+        return "ROJO";
     }
-
-    // ----------------------------
-    // COLIFORMES TOTALES
-    // ----------------------------
-    if (totales !== null && totales !== undefined && totales !== "") {
-        hayDato = true;
-
-        if (totales > LIMITES.totales_max) {
-            return "ROJO";
-        }
-
-        if (totales > LIMITES.totales_advertencia) {
-            hayAdvertencia = true;
-        }
+    
+    // Regla 3: Fecales arriba del límite → ROJO
+    if (fecales > LIMITES.fecales_max) {
+        return "ROJO";
     }
-
-    // ----------------------------
-    // RESULTADO FINAL
-    // ----------------------------
-    if (!hayDato) {
-        return "N/A"; // nada se midió
+    
+    // Regla 4: Totales arriba del límite máximo → ROJO
+    if (totales > LIMITES.totales_max) {
+        return "ROJO";
     }
-
-    if (hayAdvertencia) {
+    
+    // Regla 5: Totales en zona de advertencia → AMARILLO
+    if (totales > LIMITES.totales_advertencia) {
         return "AMARILLO";
     }
-
+    
+    // Todo dentro de límites → VERDE
     return "VERDE";
 }
-
 
 /**
  * Calcula el semáforo de pesticidas
@@ -101,13 +72,10 @@ function calcularSemaforoPesticidas(valor) {
     switch (valor) {
         case 'CUMPLE':
             return 'VERDE';
-
         case 'BAJO_RANGO':
             return 'AMARILLO';
-
-        case 'NO CUMPLE':
+        case 'PRESENTE (BAJO RANGO)':
             return 'ROJO';
-
         case 'N/A':
         default:
             return 'GRIS';
