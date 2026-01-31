@@ -12,15 +12,32 @@ const LIMITES = {
 let proveedorActual = null;
 
 // ============================================
-// FUNCIONES DE CÁLCULO DE SEMÁFOROS
+// FUNCIONES DE CÁLCULO DE SEMÁFOROS (CORREGIDO)
 // ============================================
 
 function calcularSemaforoMicro(data) {
     const { salmonella, ecoli, fecales, totales } = data;
-    if (salmonella === "N/A") return "N/A";
-    if (salmonella === "POSITIVO") return "ROJO";
-    if (ecoli > LIMITES.ecoli_max || fecales > LIMITES.fecales_max || totales > LIMITES.totales_max) return "ROJO";
-    if (totales > LIMITES.totales_advertencia) return "AMARILLO";
+    
+    // 1. Prioridad Máxima: ROJO (Si algo sale mal, no importa el resto)
+    if (salmonella === "POSITIVO" || 
+        ecoli > LIMITES.ecoli_max || 
+        fecales > LIMITES.fecales_max || 
+        totales > LIMITES.totales_max) {
+        return "ROJO";
+    }
+    
+    // 2. Prioridad Media: AMARILLO (Advertencia por totales)
+    if (totales > LIMITES.totales_advertencia) {
+        return "AMARILLO";
+    }
+    
+    // 3. Evaluar si todo es N/A para poner GRIS
+    // Si salmonella es N/A y los números son 0 o vacíos, entonces es N/A
+    if (salmonella === "N/A" && !ecoli && !fecales && !totales) {
+        return "N/A";
+    }
+
+    // 4. Si pasó los filtros de arriba, está limpio
     return "VERDE";
 }
 
@@ -30,7 +47,7 @@ function calcularSemaforoPesticidas(resultado) {
 }
 
 // ============================================
-// FUNCIONES DE FIRESTORE (Base de Datos)
+// FUNCIONES DE FIRESTORE
 // ============================================
 
 async function obtenerHistorial(cveProv) {
@@ -117,7 +134,8 @@ function actualizarPreviewSemaforos() {
     const totales = parseFloat(document.getElementById('totales').value) || 0;
     const pesticidas = document.getElementById('pesticidas').value;
     
-    if (!salmonella || !pesticidas) return;
+    // Mostramos preview si al menos hay algo seleccionado
+    if (!salmonella && !pesticidas) return;
     
     const semaforoMicro = calcularSemaforoMicro({ salmonella, ecoli, fecales, totales });
     const semaforoPest = calcularSemaforoPesticidas(pesticidas);
@@ -152,16 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('section-historial').style.opacity = '0.5';
     document.getElementById('section-registro').style.opacity = '0.5';
 
-    // 2. BUSCADOR (ESTO ES LO QUE TE FALTABA)
-    const inputBuscar = document.getElementById('buscar-proveedor');
-    if (inputBuscar) {
-        inputBuscar.addEventListener('input', (e) => {
-            // Llama a la función que está en proveedores.js
-            filtrarProveedoresPorNombre(e.target.value);
-        });
-    }
-
-    // 3. SELECCIÓN DE PROVEEDOR
+    // 2. SELECCIÓN DE PROVEEDOR
     document.getElementById('cve-prov-select').addEventListener('change', async (e) => {
         const cveProv = e.target.value;
         if (!cveProv) {
@@ -183,38 +192,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 4. PREVIEW DE SEMÁFOROS
+    // 3. PREVIEW DE SEMÁFOROS (Actualiza al escribir)
     ['salmonella', 'ecoli', 'fecales', 'totales', 'pesticidas'].forEach(id => {
-        document.getElementById(id).addEventListener('change', actualizarPreviewSemaforos);
-        document.getElementById(id).addEventListener('input', actualizarPreviewSemaforos);
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', actualizarPreviewSemaforos);
+            el.addEventListener('input', actualizarPreviewSemaforos);
+        }
     });
 
-    // 5. GUARDAR ANÁLISIS
+    // 4. GUARDAR ANÁLISIS
     document.getElementById('form-analisis').addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!proveedorActual) return alert('Seleccione un proveedor');
 
         const btn = e.target.querySelector('button[type="submit"]');
-        btn.disabled = true; btn.textContent = 'Guardando...';
+        btn.disabled = true; 
+        btn.textContent = 'Guardando...';
+
+        const s_val = document.getElementById('salmonella').value;
+        const e_val = parseFloat(document.getElementById('ecoli').value) || 0;
+        const f_val = parseFloat(document.getElementById('fecales').value) || 0;
+        const t_val = parseFloat(document.getElementById('totales').value) || 0;
+        const p_val = document.getElementById('pesticidas').value;
 
         const datos = {
             cve_prov: proveedorActual.cve_prov,
             fecha: document.getElementById('fecha').value,
-            microbiologia: {
-                salmonella: document.getElementById('salmonella').value,
-                ecoli: parseFloat(document.getElementById('ecoli').value),
-                fecales: parseFloat(document.getElementById('fecales').value),
-                totales: parseFloat(document.getElementById('totales').value)
-            },
-            pesticidas: { resultado: document.getElementById('pesticidas').value },
+            microbiologia: { salmonella: s_val, ecoli: e_val, fecales: f_val, totales: t_val },
+            pesticidas: { resultado: p_val },
             semaforos: {
-                micro: calcularSemaforoMicro({
-                    salmonella: document.getElementById('salmonella').value,
-                    ecoli: parseFloat(document.getElementById('ecoli').value),
-                    fecales: parseFloat(document.getElementById('fecales').value),
-                    totales: parseFloat(document.getElementById('totales').value)
-                }),
-                pesticidas: calcularSemaforoPesticidas(document.getElementById('pesticidas').value)
+                micro: calcularSemaforoMicro({ salmonella: s_val, ecoli: e_val, fecales: f_val, totales: t_val }),
+                pesticidas: calcularSemaforoPesticidas(p_val)
             }
         };
 
@@ -227,7 +236,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             alert('Error al guardar');
         } finally {
-            btn.disabled = false; btn.textContent = '✅ Guardar Análisis';
+            btn.disabled = false; 
+            btn.textContent = '✅ Guardar Análisis';
         }
     });
 
