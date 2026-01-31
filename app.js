@@ -11,84 +11,54 @@ const LIMITES = {
 let proveedorActual = null;
 
 // ============================================
-// LÓGICA DE SEMÁFOROS (INDEPENDIENTE)
+// LÓGICA DE SEMÁFOROS (INDEPENDIENTE Y ESTRICTA)
 // ============================================
 function calcularSemaforoMicro(data) {
     const { salmonella, ecoli, fecales, totales } = data;
     
-    // 1. SI ALGO ESTÁ FUERA DE RANGO -> ROJO INMEDIATO
-    // No importa si lo demás es N/A o 0
+    // Convertir a números reales para comparar, si es vacío o NaN será 0
+    const numEcoli = parseFloat(ecoli) || 0;
+    const numFecales = parseFloat(fecales) || 0;
+    const numTotales = parseFloat(totales) || 0;
+
+    // 1. PRIORIDAD ROJA: Si uno solo está mal, TODO es rojo
     if (salmonella === "POSITIVO" || 
-        ecoli > LIMITES.ecoli_max || 
-        fecales > LIMITES.fecales_max || 
-        totales > LIMITES.totales_max) {
+        numEcoli > LIMITES.ecoli_max || 
+        numFecales > LIMITES.fecales_max || 
+        numTotales > LIMITES.totales_max) {
         return "rojo"; 
     }
     
-    // 2. ADVERTENCIA -> AMARILLO
-    if (totales > LIMITES.totales_advertencia) {
+    // 2. PRIORIDAD AMARILLA: Advertencia por recuento alto
+    if (numTotales > LIMITES.totales_advertencia) {
         return "amarillo";
     }
     
-    // 3. CASO N/A (Solo si TODO es vacío o N/A)
-    const esVacio = (n) => n === 0 || n === "" || isNaN(n) || n === null;
-    if (salmonella === "N/A" && esVacio(ecoli) && esVacio(fecales) && esVacio(totales)) {
+    // 3. PRIORIDAD GRIS (N/A): Solo si no hay datos de nada
+    if (salmonella === "N/A" && numEcoli === 0 && numFecales === 0 && numTotales === 0) {
         return "n-a";
     }
 
-    // 4. SI NADA FALLÓ -> VERDE
+    // 4. SI TODO ESTÁ LIMPIO -> VERDE
     return "verde";
 }
 
 function calcularSemaforoPesticidas(resultado) {
-    // Coincidir con los IDs de tu index.html
-    if (resultado === "BAJO_RANGO") return "amarillo"; 
+    // Ajustado exactamente a los valores de TU index.html
+    if (resultado === "PRESENTE (BAJO RANGO)") return "amarillo"; 
     if (resultado === "NO CUMPLE") return "rojo";
     if (resultado === "CUMPLE") return "verde";
     return "n-a";
 }
 
 // ============================================
-// UI Y EVENTOS
+// UI Y VISTA PREVIA
 // ============================================
-
-function mostrarHistorial(registros) {
-    const container = document.getElementById('historial-container');
-    if (registros.length === 0) {
-        container.innerHTML = '<p class="text-muted">No hay registros previos</p>';
-        return;
-    }
-    
-    let html = `<table class="tabla-historial"><thead><tr>
-        <th>Fecha</th><th>Salmonella</th><th>E. coli</th><th>Fecales</th><th>Totales</th><th>Pesticidas</th><th>🚦 Micro</th><th>🚦 Pest</th>
-    </tr></thead><tbody>`;
-    
-    registros.forEach(reg => {
-        const m = reg.microbiologia || {};
-        const p = reg.pesticidas || {};
-        const s = reg.semaforos || {};
-        const v = (val) => (val !== undefined && val !== null && val !== '') ? val : 'N/A';
-        
-        // Aquí forzamos que use las clases correctas del CSS
-        html += `<tr>
-            <td>${reg.fecha || 'N/A'}</td>
-            <td>${v(m.salmonella)}</td>
-            <td>${v(m.ecoli)}</td>
-            <td>${v(m.fecales)}</td>
-            <td>${v(m.totales)}</td>
-            <td>${v(p.resultado)}</td>
-            <td><span class="semaforo ${s.micro ? s.micro.toLowerCase() : 'n-a'}"></span></td>
-            <td><span class="semaforo ${s.pesticidas ? s.pesticidas.toLowerCase() : 'n-a'}"></span></td>
-        </tr>`;
-    });
-    container.innerHTML = html + `</tbody></table>`;
-}
-
 function actualizarPreviewSemaforos() {
     const s = document.getElementById('salmonella').value;
-    const e = parseFloat(document.getElementById('ecoli').value);
-    const f = parseFloat(document.getElementById('fecales').value);
-    const t = parseFloat(document.getElementById('totales').value);
+    const e = document.getElementById('ecoli').value;
+    const f = document.getElementById('fecales').value;
+    const t = document.getElementById('totales').value;
     const p = document.getElementById('pesticidas').value;
     
     const semaforoMicro = calcularSemaforoMicro({ salmonella: s, ecoli: e, fecales: f, totales: t });
@@ -97,21 +67,25 @@ function actualizarPreviewSemaforos() {
     const pMicro = document.getElementById('preview-micro');
     const pPest = document.getElementById('preview-pesticidas');
     
-    // Limpiar clases anteriores y poner la nueva
+    // Cambiamos la clase para que el CSS (styles.css) lo pinte
     pMicro.className = `semaforo ${semaforoMicro}`;
     pPest.className = `semaforo ${semaforoPest}`;
     
     document.getElementById('preview-semaforos').classList.remove('hidden');
 }
 
-// ... (Resto de funciones registrarAnalisis y obtenerHistorial se mantienen igual)
-
+// ============================================
+// INICIALIZACIÓN Y EVENTOS
+// ============================================
 document.addEventListener('DOMContentLoaded', async () => {
+    // Carga inicial de proveedores
     await cargarProveedoresXML();
     llenarDropdownProveedores();
     
+    // Fecha actual
     document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
 
+    // Cambio de proveedor
     document.getElementById('cve-prov-select').addEventListener('change', async (e) => {
         const cve = e.target.value;
         if (!cve) return;
@@ -124,14 +98,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    ['salmonella', 'ecoli', 'fecales', 'totales', 'pesticidas'].forEach(id => {
-        document.getElementById(id).addEventListener('input', actualizarPreviewSemaforos);
-        document.getElementById(id).addEventListener('change', actualizarPreviewSemaforos);
+    // Escuchar cambios en TODOS los campos para actualizar el semáforo en tiempo real
+    const campos = ['salmonella', 'ecoli', 'fecales', 'totales', 'pesticidas'];
+    campos.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', actualizarPreviewSemaforos);
+            el.addEventListener('change', actualizarPreviewSemaforos);
+        }
     });
 
+    // Guardar en Firebase
     document.getElementById('form-analisis').addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (!proveedorActual) return;
+        if (!proveedorActual) return alert("Selecciona un proveedor");
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
 
         const s = document.getElementById('salmonella').value;
         const e_val = parseFloat(document.getElementById('ecoli').value) || 0;
@@ -150,18 +133,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         };
 
-        const btn = e.target.querySelector('button[type="submit"]');
-        btn.disabled = true;
-        await registrarAnalisis(datos);
-        document.getElementById('modal-confirmacion').classList.remove('hidden');
-        document.getElementById('form-analisis').reset();
-        actualizarPreviewSemaforos(); // Reset preview
-        const hist = await obtenerHistorial(proveedorActual.cve_prov);
-        mostrarHistorial(hist);
-        btn.disabled = false;
+        try {
+            await registrarAnalisis(datos);
+            document.getElementById('modal-confirmacion').classList.remove('hidden');
+            document.getElementById('form-analisis').reset();
+            actualizarPreviewSemaforos();
+            const hist = await obtenerHistorial(proveedorActual.cve_prov);
+            mostrarHistorial(hist);
+        } catch (err) {
+            alert("Error al guardar");
+        } finally {
+            btn.disabled = false;
+        }
     });
 
     document.getElementById('btn-cerrar-modal').addEventListener('click', () => {
         document.getElementById('modal-confirmacion').classList.add('hidden');
     });
 });
+
+// Nota: Asegúrate que mostrarHistorial use: class="semaforo ${s.micro.toLowerCase()}"
