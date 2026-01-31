@@ -12,13 +12,13 @@ const LIMITES = {
 let proveedorActual = null;
 
 // ============================================
-// FUNCIONES DE CÁLCULO DE SEMÁFOROS (CORREGIDO)
+// FUNCIONES DE CÁLCULO DE SEMÁFOROS (LÓGICA MEJORADA)
 // ============================================
 
 function calcularSemaforoMicro(data) {
     const { salmonella, ecoli, fecales, totales } = data;
     
-    // 1. Prioridad Máxima: ROJO (Si algo sale mal, no importa el resto)
+    // 1. REGLA DE ORO: SI ALGO ESTÁ MAL, ES ROJO (Independiente de los N/A)
     if (salmonella === "POSITIVO" || 
         ecoli > LIMITES.ecoli_max || 
         fecales > LIMITES.fecales_max || 
@@ -26,24 +26,27 @@ function calcularSemaforoMicro(data) {
         return "ROJO";
     }
     
-    // 2. Prioridad Media: AMARILLO (Advertencia por totales)
+    // 2. REGLA DE ADVERTENCIA: AMARILLO
     if (totales > LIMITES.totales_advertencia) {
         return "AMARILLO";
     }
     
-    // 3. Evaluar si todo es N/A para poner GRIS
-    // Si salmonella es N/A y los números son 0 o vacíos, entonces es N/A
-    if (salmonella === "N/A" && !ecoli && !fecales && !totales) {
+    // 3. REGLA DE N/A O VACÍO: GRIS
+    // Solo es N/A si todo es neutro (N/A, 0 o vacío)
+    const esNumeroVacio = (n) => n === 0 || n === "" || isNaN(n);
+    if (salmonella === "N/A" && esNumeroVacio(ecoli) && esNumeroVacio(fecales) && esNumeroVacio(totales)) {
         return "N/A";
     }
 
-    // 4. Si pasó los filtros de arriba, está limpio
+    // 4. SI PASÓ TODO LO ANTERIOR: VERDE
     return "VERDE";
 }
 
 function calcularSemaforoPesticidas(resultado) {
-    if (resultado === "N/A") return "N/A";
-    return resultado === "CUMPLE" ? "VERDE" : "ROJO";
+    if (resultado === "BAJO_RANGO") return "AMARILLO"; // <--- ESTO TE FALTABA
+    if (resultado === "NO CUMPLE") return "ROJO";
+    if (resultado === "CUMPLE") return "VERDE";
+    return "N/A"; // Para el caso de "N/A"
 }
 
 // ============================================
@@ -56,13 +59,9 @@ async function obtenerHistorial(cveProv) {
             .where('cve_prov', '==', cveProv)
             .orderBy('timestamp', 'desc')
             .get();
-        
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
-        console.error("Error al obtener historial:", error);
+        console.error("Error historial:", error);
         throw error;
     }
 }
@@ -75,13 +74,13 @@ async function registrarAnalisis(datos) {
         });
         return docRef.id;
     } catch (error) {
-        console.error("Error al registrar análisis:", error);
+        console.error("Error registro:", error);
         throw error;
     }
 }
 
 // ============================================
-// FUNCIONES DE INTERFAZ (UI)
+// FUNCIONES DE UI
 // ============================================
 
 function mostrarInfoProveedor(proveedor) {
@@ -90,7 +89,6 @@ function mostrarInfoProveedor(proveedor) {
     document.getElementById('prov-estado-origen').textContent = proveedor.edo_origen || '--';
     document.getElementById('prov-estatus').textContent = proveedor.activo ? '✅ Activo' : '❌ Inactivo';
     document.getElementById('proveedor-info').classList.remove('hidden');
-    
     document.getElementById('section-historial').style.opacity = '1';
     document.getElementById('section-registro').style.opacity = '1';
 }
@@ -98,7 +96,7 @@ function mostrarInfoProveedor(proveedor) {
 function mostrarHistorial(registros) {
     const container = document.getElementById('historial-container');
     if (registros.length === 0) {
-        container.innerHTML = '<p class="text-muted">No hay registros previos para este proveedor</p>';
+        container.innerHTML = '<p class="text-muted">No hay registros previos</p>';
         return;
     }
     
@@ -107,110 +105,75 @@ function mostrarHistorial(registros) {
     </tr></thead><tbody>`;
     
     registros.forEach(reg => {
-        const micro = reg.microbiologia || {};
-        const pest = reg.pesticidas || {};
-        const sem = reg.semaforos || {};
-        const mostrarV = (v) => (v !== undefined && v !== null && v !== '') ? v : 'N/A';
+        const m = reg.microbiologia || {};
+        const p = reg.pesticidas || {};
+        const s = reg.semaforos || {};
+        const v = (val) => (val !== undefined && val !== null && val !== '') ? val : 'N/A';
         
         html += `<tr>
             <td>${reg.fecha || 'N/A'}</td>
-            <td>${mostrarV(micro.salmonella)}</td>
-            <td>${mostrarV(micro.ecoli)}</td>
-            <td>${mostrarV(micro.fecales)}</td>
-            <td>${mostrarV(micro.totales)}</td>
-            <td>${mostrarV(pest.resultado)}</td>
-            <td><span class="semaforo ${(sem.micro || 'n/a').toLowerCase()}"></span></td>
-            <td><span class="semaforo ${(sem.pesticidas || 'n/a').toLowerCase()}"></span></td>
+            <td>${v(m.salmonella)}</td>
+            <td>${v(m.ecoli)}</td>
+            <td>${v(m.fecales)}</td>
+            <td>${v(m.totales)}</td>
+            <td>${v(p.resultado)}</td>
+            <td><span class="semaforo ${(s.micro || 'n/a').toLowerCase()}"></span></td>
+            <td><span class="semaforo ${(s.pesticidas || 'n/a').toLowerCase()}"></span></td>
         </tr>`;
     });
-    html += `</tbody></table>`;
-    container.innerHTML = html;
+    container.innerHTML = html + `</tbody></table>`;
 }
 
 function actualizarPreviewSemaforos() {
-    const salmonella = document.getElementById('salmonella').value;
-    const ecoli = parseFloat(document.getElementById('ecoli').value) || 0;
-    const fecales = parseFloat(document.getElementById('fecales').value) || 0;
-    const totales = parseFloat(document.getElementById('totales').value) || 0;
-    const pesticidas = document.getElementById('pesticidas').value;
+    const s = document.getElementById('salmonella').value;
+    const e = parseFloat(document.getElementById('ecoli').value) || 0;
+    const f = parseFloat(document.getElementById('fecales').value) || 0;
+    const t = parseFloat(document.getElementById('totales').value) || 0;
+    const p = document.getElementById('pesticidas').value;
     
-    // Mostramos preview si al menos hay algo seleccionado
-    if (!salmonella && !pesticidas) return;
+    const semaforoMicro = calcularSemaforoMicro({ salmonella: s, ecoli: e, fecales: f, totales: t });
+    const semaforoPest = calcularSemaforoPesticidas(p);
     
-    const semaforoMicro = calcularSemaforoMicro({ salmonella, ecoli, fecales, totales });
-    const semaforoPest = calcularSemaforoPesticidas(pesticidas);
+    const pMicro = document.getElementById('preview-micro');
+    const pPest = document.getElementById('preview-pesticidas');
     
-    const previewMicro = document.getElementById('preview-micro');
-    const previewPest = document.getElementById('preview-pesticidas');
-    
-    previewMicro.className = `semaforo ${semaforoMicro.toLowerCase()}`;
-    previewPest.className = `semaforo ${semaforoPest.toLowerCase()}`;
+    pMicro.className = `semaforo ${semaforoMicro.toLowerCase()}`;
+    pPest.className = `semaforo ${semaforoPest.toLowerCase()}`;
     document.getElementById('preview-semaforos').classList.remove('hidden');
 }
 
-function mostrarModal() { document.getElementById('modal-confirmacion').classList.remove('hidden'); }
-function cerrarModal() { document.getElementById('modal-confirmacion').classList.add('hidden'); }
-
-function limpiarFormulario() {
-    document.getElementById('form-analisis').reset();
-    document.getElementById('preview-semaforos').classList.add('hidden');
-    document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
-}
-
 // ============================================
-// EVENT LISTENERS (Lógica de Arranque)
+// INICIO Y EVENTOS
 // ============================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Cargar datos iniciales
     await cargarProveedoresXML();
     llenarDropdownProveedores();
     
     document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
-    document.getElementById('section-historial').style.opacity = '0.5';
-    document.getElementById('section-registro').style.opacity = '0.5';
 
-    // 2. SELECCIÓN DE PROVEEDOR
     document.getElementById('cve-prov-select').addEventListener('change', async (e) => {
-        const cveProv = e.target.value;
-        if (!cveProv) {
-            document.getElementById('proveedor-info').classList.add('hidden');
-            proveedorActual = null;
-            return;
-        }
-        
-        const proveedor = buscarProveedorPorCodigo(cveProv);
-        if (proveedor) {
-            proveedorActual = proveedor;
-            mostrarInfoProveedor(proveedor);
-            try {
-                const historial = await obtenerHistorial(cveProv);
-                mostrarHistorial(historial);
-            } catch (error) {
-                console.error('Error:', error);
-            }
+        const cve = e.target.value;
+        if (!cve) return;
+        const prov = buscarProveedorPorCodigo(cve);
+        if (prov) {
+            proveedorActual = prov;
+            mostrarInfoProveedor(prov);
+            const hist = await obtenerHistorial(cve);
+            mostrarHistorial(hist);
         }
     });
 
-    // 3. PREVIEW DE SEMÁFOROS (Actualiza al escribir)
     ['salmonella', 'ecoli', 'fecales', 'totales', 'pesticidas'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('change', actualizarPreviewSemaforos);
-            el.addEventListener('input', actualizarPreviewSemaforos);
-        }
+        document.getElementById(id).addEventListener('input', actualizarPreviewSemaforos);
+        document.getElementById(id).addEventListener('change', actualizarPreviewSemaforos);
     });
 
-    // 4. GUARDAR ANÁLISIS
     document.getElementById('form-analisis').addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (!proveedorActual) return alert('Seleccione un proveedor');
+        if (!proveedorActual) return;
 
-        const btn = e.target.querySelector('button[type="submit"]');
-        btn.disabled = true; 
-        btn.textContent = 'Guardando...';
-
-        const s_val = document.getElementById('salmonella').value;
+        const s = document.getElementById('salmonella').value;
         const e_val = parseFloat(document.getElementById('ecoli').value) || 0;
         const f_val = parseFloat(document.getElementById('fecales').value) || 0;
         const t_val = parseFloat(document.getElementById('totales').value) || 0;
@@ -219,27 +182,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         const datos = {
             cve_prov: proveedorActual.cve_prov,
             fecha: document.getElementById('fecha').value,
-            microbiologia: { salmonella: s_val, ecoli: e_val, fecales: f_val, totales: t_val },
+            microbiologia: { salmonella: s, ecoli: e_val, fecales: f_val, totales: t_val },
             pesticidas: { resultado: p_val },
             semaforos: {
-                micro: calcularSemaforoMicro({ salmonella: s_val, ecoli: e_val, fecales: f_val, totales: t_val }),
+                micro: calcularSemaforoMicro({ salmonella: s, ecoli: e_val, fecales: f_val, totales: t_val }),
                 pesticidas: calcularSemaforoPesticidas(p_val)
             }
         };
 
-        try {
-            await registrarAnalisis(datos);
-            mostrarModal();
-            limpiarFormulario();
-            const historial = await obtenerHistorial(proveedorActual.cve_prov);
-            mostrarHistorial(historial);
-        } catch (error) {
-            alert('Error al guardar');
-        } finally {
-            btn.disabled = false; 
-            btn.textContent = '✅ Guardar Análisis';
-        }
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        await registrarAnalisis(datos);
+        document.getElementById('modal-confirmacion').classList.remove('hidden');
+        document.getElementById('form-analisis').reset();
+        const hist = await obtenerHistorial(proveedorActual.cve_prov);
+        mostrarHistorial(hist);
+        btn.disabled = false;
     });
 
-    document.getElementById('btn-cerrar-modal').addEventListener('click', cerrarModal);
+    document.getElementById('btn-cerrar-modal').addEventListener('click', () => {
+        document.getElementById('modal-confirmacion').classList.add('hidden');
+    });
 });
