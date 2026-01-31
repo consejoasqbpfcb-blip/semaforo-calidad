@@ -74,7 +74,7 @@ function calcularSemaforoPesticidas(valor) {
             return 'VERDE';
         case 'BAJO_RANGO':
             return 'AMARILLO';
-        case 'NO CUMPLE':
+        case 'PRESENTE (BAJO RANGO)':
             return 'ROJO';
         case 'N/A':
         default:
