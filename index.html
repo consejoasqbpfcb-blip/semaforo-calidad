@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Calidad - Proveedores</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌱 Sistema de Control de Calidad</h1>
+            <p class="subtitle">Monitoreo de Proveedores Agrícolas</p>
+        </header>
+
+        <main>
+            <!-- SECCIÓN 1: SELECCIÓN DE PROVEEDOR -->
+            <section class="card">
+                <h2>1️⃣ Seleccionar Proveedor</h2>
+                <div class="form-group">
+                    <label for="cve-prov-select">Proveedor:</label>
+                    <select id="cve-prov-select">
+                        <option value="">-- Cargando proveedores... --</option>
+                    </select>
+                </div>
+                <div id="proveedor-info" class="info-box hidden">
+                    <p><strong>Código:</strong> <span id="prov-codigo"></span></p>
+                    <p><strong>Nombre:</strong> <span id="prov-nombre"></span></p>
+                    <p><strong>Estado Origen:</strong> <span id="prov-estado-origen"></span></p>
+                    <p><strong>Estatus:</strong> <span id="prov-estatus"></span></p>
+                </div>
+            </section>
+
+            <!-- SECCIÓN 2: HISTORIAL -->
+            <section class="card" id="section-historial">
+                <h2>2️⃣ Historial de Análisis</h2>
+                <div id="historial-container">
+                    <p class="text-muted">Seleccione un proveedor para ver su historial</p>
+                </div>
+            </section>
+
+            <!-- SECCIÓN 3: NUEVO REGISTRO -->
+            <section class="card" id="section-registro">
+                <h2>3️⃣ Registrar Nuevo Análisis</h2>
+                <form id="form-analisis">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fecha">Fecha:</label>
+                            <input type="date" id="fecha" required>
+                        </div>
+                    </div>
+
+                    <h3>Microbiología</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="salmonella">Salmonella:</label>
+                            <select id="salmonella" required>
+                                <option value="">-- Seleccione --</option>
+                                <option value="NEGATIVO">NEGATIVO</option>
+                                <option value="POSITIVO">POSITIVO</option>
+                                <option value="N/A">N/A</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ecoli">E. coli (UFC/g):</label>
+                            <input type="number" id="ecoli" min="0" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="fecales">Coliformes Fecales (UFC/g):</label>
+                            <input type="number" id="fecales" min="0" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="totales">Coliformes Totales (UFC/g):</label>
+                            <input type="number" id="totales" min="0" step="0.1" required>
+                        </div>
+                    </div>
+
+                    <h3>Pesticidas</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="pesticidas">Resultado:</label>
+                            <select id="pesticidas" required>
+                                <option value="">-- Seleccione --</option>
+                                <option value="CUMPLE">CUMPLE</option>
+                                <option value="NO CUMPLE">NO CUMPLE</option>
+                                <option value="N/A">N/A</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="semaforos-preview hidden" id="preview-semaforos">
+                        <h3>Vista Previa de Semáforos</h3>
+                        <div class="semaforo-display">
+                            <div class="semaforo-item">
+                                <span>Microbiología:</span>
+                                <span id="preview-micro" class="semaforo"></span>
+                            </div>
+                            <div class="semaforo-item">
+                                <span>Pesticidas:</span>
+                                <span id="preview-pesticidas" class="semaforo"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success">✅ Guardar Análisis</button>
+                </form>
+            </section>
+        </main>
+
+        <!-- MODAL DE CONFIRMACIÓN -->
+        <div id="modal-confirmacion" class="modal hidden">
+            <div class="modal-content">
+                <h3>✅ Registro Guardado</h3>
+                <p>El análisis ha sido registrado exitosamente.</p>
+                <button id="btn-cerrar-modal" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <!-- App JavaScript -->
+    <script src="config.js"></script>
+    <script src="proveedores.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
