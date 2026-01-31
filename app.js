@@ -3,18 +3,19 @@
 // ============================================
 
 const LIMITES = {
-    ecoli_max: 10,             // UFC/g (ROJO si > 10)
-    fecales_max: 10,           // UFC/g (ROJO si > 10)
-    totales_advertencia: 100,  // UFC/g (AMARILLO si > 100)
-    totales_max: 1000          // UFC/g (ROJO si > 1000)
+    ecoli_max: 10,              // UFC/g (ROJO si > 10)
+    fecales_max: 10,            // UFC/g (ROJO si > 10)
+    totales_advertencia: 100,   // UFC/g (AMARILLO si > 100)
+    totales_max: 1000           // UFC/g (ROJO si > 1000)
 };
 
+let proveedorActual = null;
+
 // ============================================
-// SEMÁFORO MICROBIOLÓGICO (VERSIÓN CORRECTA)
+// CÁLCULO DE SEMÁFOROS
 // ============================================
 
-function calcularSemaforoMicro(data) {
-    const { salmonella, ecoli, fecales, totales } = data;
+function calcularSemaforoMicro({ salmonella, ecoli, fecales, totales }) {
 
     let hayDato = false;
     let hayAdvertencia = false;
@@ -32,7 +33,7 @@ function calcularSemaforoMicro(data) {
     // ----------------------------
     // E. COLI
     // ----------------------------
-    if (Number.isFinite(ecoli)) {
+    if (ecoli !== null && ecoli !== undefined && !isNaN(ecoli)) {
         hayDato = true;
         if (ecoli > LIMITES.ecoli_max) {
             return "ROJO";
@@ -42,7 +43,7 @@ function calcularSemaforoMicro(data) {
     // ----------------------------
     // FECALES
     // ----------------------------
-    if (Number.isFinite(fecales)) {
+    if (fecales !== null && fecales !== undefined && !isNaN(fecales)) {
         hayDato = true;
         if (fecales > LIMITES.fecales_max) {
             return "ROJO";
@@ -52,7 +53,7 @@ function calcularSemaforoMicro(data) {
     // ----------------------------
     // TOTALES
     // ----------------------------
-    if (Number.isFinite(totales)) {
+    if (totales !== null && totales !== undefined && !isNaN(totales)) {
         hayDato = true;
 
         if (totales > LIMITES.totales_max) {
@@ -77,3 +78,43 @@ function calcularSemaforoMicro(data) {
 
     return "VERDE";
 }
+
+function calcularSemaforoPesticidas(valor) {
+    switch (valor) {
+        case 'CUMPLE':
+            return 'VERDE';
+        case 'BAJO_RANGO':
+            return 'AMARILLO';
+        case 'NO CUMPLE':
+            return 'ROJO';
+        default:
+            return 'GRIS';
+    }
+}
+
+// ============================================
+// PREVIEW
+// ============================================
+
+function actualizarPreviewSemaforos() {
+    const salmonella = document.getElementById('salmonella').value;
+    const ecoli = parseFloat(document.getElementById('ecoli').value);
+    const fecales = parseFloat(document.getElementById('fecales').value);
+    const totales = parseFloat(document.getElementById('totales').value);
+    const pesticidas = document.getElementById('pesticidas').value;
+
+    if (!pesticidas) {
+        document.getElementById('preview-semaforos').classList.add('hidden');
+        return;
+    }
+
+    const semMicro = calcularSemaforoMicro({ salmonella, ecoli, fecales, totales });
+    const semPest = calcularSemaforoPesticidas(pesticidas);
+
+    document.getElementById('preview-micro').className =
+        `semaforo ${semMicro.toLowerCase()}`;
+
+    document.getElementById('preview-pesticidas').className =
+        `semaforo ${semPest.toLowerCase()}`;
+
+    document.getElementById('preview-semafo
